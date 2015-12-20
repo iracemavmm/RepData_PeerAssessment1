@@ -6,20 +6,195 @@ output:
 ---
 
 
-## Loading and preprocessing the data
+Removes all variables from environment
+```{r, echo=TRUE}
+rm(list=ls(all=TRUE)) 
+```
+
+#Loading and preprocessing the data
+
+##Show any code that is needed to
+### 1.Load the data (i.e. read.csv())
+### 2.Process/transform the data (if necessary) into a format suitable for your analysis
+````{r, echo=TRUE}
+dat = read.csv('activity.csv', header = T)
+names(dat)
+str(dat)
+head(dat)
+```
+
+#What is mean total number of steps taken per day?
+## For this part of the assignment, you can ignore the missing values in the dataset.
+### 1.Calculate the total number of steps taken per day
+### 2.If you do not understand the difference between a histogram and a barplot, research the difference between them. Make a histogram of the total number of steps taken each day
+### 3.Calculate and report the mean and median of the total number of steps taken per day
 
 
+#Histogram, Mean & Median
+````{r, echo=TRUE}
+library(data.table)
+dat_tbl = data.table(dat)
+dat_tbl_summary = dat_tbl[, list(total_steps = sum(steps, na.rm = T)), 
+                          by = date]
+```
+#Make The Histogram, And Report on Mean and Median:
+#Making The Generation of This Plot Into A Function So I Can Re-use Later
+```{r, echo=TRUE}
+gen_hist = function(x, title){
+  hist(x, 
+       breaks = 20,
+       main = title,
+       xlab = 'Total Number of Steps', col = 'grey',
+       
+       cex.main = .9)
+  
+  #caluclate mean and median
+  mean_value = round(mean(x), 1)
+  median_value = round(median(x), 1)
+  
+  #place lines for mean and median on histogram
+  abline(v=mean_value, lwd = 3, col = 'blue')
+  abline(v=median_value, lwd = 3, col = 'green')
+  
+  #create legend
+  legend('topright', lty = 1, lwd = 3, col = c("blue", "green"),
+         cex = .8, 
+         legend = c(paste('Mean: ', mean_value),
+                    paste('Median: ', median_value))
+  )
+}
 
-## What is mean total number of steps taken per day?
+gen_hist(dat_tbl_summary$total_steps, 'Number of Steps Taken Each Day')
+
+```
+
+#What is the average daily activity pattern?
+### 1.Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+### 2.Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+##summarize dataset by interval
+````{r, echo=TRUE}
+dat_tbl_summary_intv = dat_tbl[, list(avg_steps = mean(steps, na.rm = T)), 
+                               by = interval]
+##plot the time series
+with(dat_tbl_summary_intv, {
+  plot(interval, avg_steps, type = 'l',
+       main = 'Average Steps by Time Interval',
+       xlab = '5 Minute Time Interval',
+       ylab = 'Average Number of Steps')
+})
+
+##Find Interval That Has The Maximum Avg Steps
+max_steps = dat_tbl_summary_intv[which.max(avg_steps), ]
+
+##Generate Label String
+max_lab = paste('Maximum Of ', round(max_steps$avg_steps, 1), ' Steps \n on ', max_steps$interval, 'th Time Interval', sep = '')
+
+##Collect Cooridinates of The Max Interval For Graphing
+points(max_steps$interval,  max_steps$avg_steps, col = 'blue', lwd = 4, pch = 20)
+
+##Add Label To Annotate Maximum # Steps And Interval
+legend("topright",
+       legend = max_lab,
+       text.col = 'blue',
+       bty = 'n'
+)
+
+```
+#Imputing missing values
+
+## Note that there are a number of days/intervals where there are missing values (coded as NA). The presence of missing days may introduce bias into some calculations or summaries of the data.
+### 1.Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+### 2.Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+### 3.Create a new dataset that is equal to the original dataset but with the missing data filled in.
+### 4.Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
 
 
+##Missing Values
+````{r, echo=TRUE}
+sum(is.na(dat$steps))
+```
+# join the dataframe- that summarizes the average number of steps per interval to the original dataset
+````{r, echo=TRUE}
+setkey(dat_tbl, interval)
+setkey(dat_tbl_summary_intv, interval)
+```
 
-## What is the average daily activity pattern?
+#Create function that will return the second value if the first value is NA
+````{r, echo=TRUE}
+NA_replace = function(x,y){
+  if(is.na(x)){
+    
+    return(y)
+  }
+  return(x)
+}
+```
 
+#create new dataset that replaces NAs with average values
+````{r, echo=TRUE}
+dat_tbl_miss = dat_tbl[dat_tbl_summary_intv]
+dat_tbl_miss$new_steps = mapply(NA_replace,dat_tbl_miss$steps, dat_tbl_miss$avg_steps)
+```
 
+#summaryize new dataset by day
+````{r, echo=TRUE}
+dat_tbl_summary_miss = dat_tbl_miss[, list(new_steps = sum(new_steps, na.rm = T)), by = date]
+```
 
-## Imputing missing values
+#new dataset
+````{r, echo=TRUE}
+head(dat_tbl_summary_miss)
+```
 
+#New Histogram
+````{r, echo=TRUE}
+gen_hist(dat_tbl_summary$total_steps, 'Missing Values Removed')
+gen_hist(dat_tbl_summary_miss$new_steps, 'Missing Values Replaced With \n Mean For Interval')
+```
 
+# Are there differences in activity patterns between weekdays and weekends?
+# For this part the weekdays() function may be of some help here. Use the dataset with the filled-in missing values for this part.
+### 1.Create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.
+### 2.Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). See the README file in the GitHub repository to see an example of what this plot should look like using simulated data.
+````{r, echo=TRUE}
+weekpart = function(x){
+  if(x %in% c('Saturday', 'Sunday')){
+    return('Weekend')
+  }
+  
+  return('Weekday')
+}
+```
 
-## Are there differences in activity patterns between weekdays and weekends?
+#Add Name of Week
+````{r, echo=TRUE}
+dat_tbl_miss$dayname = weekdays(as.Date(dat_tbl_miss$date))
+```
+
+#Add Factor Variable To Differentiate Weekday and Weekend
+````{r, echo=TRUE}
+dat_tbl_miss$daytype = as.factor(apply(as.matrix(dat_tbl_miss$dayname), 1, weekpart))
+```
+
+#Summarize Dataset: Mean grouped by interval and daytype
+````{r, echo=TRUE}
+dat_tbl_summary_miss = dat_tbl_miss[, list(avg_steps = mean(new_steps, na.rm = T)), 
+                                    by = list(interval, daytype)]
+```
+
+#inspect dataset
+````{r, echo=TRUE}
+str(dat_tbl_summary_miss)
+```
+
+#Below is the panel plot:
+````{r, echo=TRUE}
+library(lattice)
+xyplot(avg_steps~interval | daytype, data = dat_tbl_summary_miss,
+       type = 'l',
+       xlab = 'Interval',
+       ylab = 'Number of Steps',
+       layout = c(1,2))
+       
+```
